@@ -8,12 +8,13 @@ from PIL import Image
 from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.utils import to_categorical
 from config import IMAGE_SIZE, ALLOWED_CLASSES, OTHER_CLASS_NAME
+from tqdm import tqdm
 
 def load_mura_dataset(base_path, csv_path):
     df = pd.read_csv(csv_path, names=['study', 'label'], skiprows=1)
     
     image_paths, labels, body_parts = [], [], []
-    for _, row in df.iterrows():
+    for _, row in tqdm(df.iterrows(), total=len(df), desc="Loading image paths"):
         # Get class name (e.g. WRIST, ELBOW)
         study_path = row['study']
         class_name = study_path.split('/')[2].upper()
@@ -32,12 +33,19 @@ def load_mura_dataset(base_path, csv_path):
     return image_paths, labels, body_parts
 
 
-def preprocess_images(image_paths, image_size=IMAGE_SIZE):
+def preprocess_images(image_paths, image_size=(224, 224)):
+    from tqdm import tqdm
+    import cv2
+    import numpy as np
+
     images = []
-    for path in image_paths:
-        img = Image.open(path).convert('L').resize(image_size)
-        img = np.array(img).astype(np.float32) / 255.0
-        images.append(np.expand_dims(img, axis=-1))  # Shape: (H, W, 1)
+    for path in tqdm(image_paths, desc="Preprocessing images"):
+        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        img = cv2.resize(img, image_size)
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)  # Expand to 3 channels
+        img = img.astype("float32") / 255.0
+        images.append(img)
+    
     return np.array(images)
 
 
