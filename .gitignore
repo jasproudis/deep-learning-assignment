@@ -1,10 +1,10 @@
-__pycache__/
-*.pyc
-.DS_Store
-mura_cache/
-*.ipynb_checkpoints/
+# Ignore model files
+*.keras
 *.h5
 *.joblib
+models/
+
+# Ignore picture files
 *.png
 *.jpg
 *.jpeg
@@ -12,4 +12,23 @@ mura_cache/
 *.gif
 *.tif
 *.tiff
+
+# Ignore image and dataset cache
+mura_cache/
 *.npz
+
+# Ignore Python artifacts
+__pycache__/
+*.pyc
+
+# Ignore Jupyter checkpoints
+*.ipynb_checkpoints/
+
+# Ignore OS files
+.DS_Store
+
+# Ignore virtual environments
+venv/
+code/venv/
+*.dll
+*.pyd
