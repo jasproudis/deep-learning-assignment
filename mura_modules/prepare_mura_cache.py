@@ -9,7 +9,7 @@ from tensorflow.keras.utils import to_categorical
 import cv2
 
 # ---- Config ----
-IMAGE_SIZE = (224, 224)
+IMAGE_SIZE = (244, 244)
 ALLOWED_CLASSES = {'WRIST', 'ELBOW', 'SHOULDER', 'FINGER', 'FOREARM', 'HAND', 'HUMERUS'}
 OTHER_CLASS_NAME = 'OTHER'
 
@@ -33,15 +33,15 @@ def load_image_paths_and_labels(base_path, csv_path):
 
     return image_paths, np.array(labels), np.array(body_parts)
 
-def preprocess_images(image_paths, image_size=(224, 224)):
+def preprocess_images(image_paths, image_size=(244, 244)):
     images = []
     for path in tqdm(image_paths, desc="Preprocessing images"):
         img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         img = cv2.resize(img, image_size)
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)  # Expand to 3 channels
-        img = img.astype("float32") / 255.0
+        img = img.astype("float16") / 255.0      # Use float16 here in order to load the model in RAM and save 50% without accuracy cost.
         images.append(img)
-    return np.array(images, dtype=np.float32)
+    return np.array(images, dtype=np.float16)
 
 def encode_body_parts(body_parts):
     le = LabelEncoder()
@@ -61,10 +61,10 @@ def prepare_and_save_dataset(base_path, csv_name, output_path):
 # ---- Main ----
 if __name__ == "__main__":
     BASE_PATH = "C:\\Users\\jasproudis\\Desktop\\MscDataScience\\Deep Learning\\MURA-v1.1"
-    CACHE_DIR = "./mura_cache"
+    CACHE_DIR = "C:\\Users\\jasproudis\\Desktop\\MscDataScience\\Deep Learning"
     os.makedirs(CACHE_DIR, exist_ok=True)
 
     prepare_and_save_dataset(BASE_PATH, "train_labeled_studies.csv", f"{CACHE_DIR}/mura_train_data.npz")
     prepare_and_save_dataset(BASE_PATH, "valid_labeled_studies.csv", f"{CACHE_DIR}/mura_valid_data.npz")
 
-    print("✅ Done! Saved to mura_cache/")
+    print("✅ Done! Saved")
