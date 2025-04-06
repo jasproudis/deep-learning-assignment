@@ -1,0 +1,27 @@
+📊 Overall class distribution (0 = normal, 1 = abnormal):
+label
+0    8280
+1    5176
+Name: count, dtype: int64
+
+🦴 Samples per body part:
+body_part
+XR_WRIST       3460
+XR_SHOULDER    2820
+XR_HAND        2018
+XR_FINGER      1935
+XR_ELBOW       1754
+XR_FOREARM      877
+XR_HUMERUS      592
+Name: count, dtype: int64
+
+🧮 Class distribution per body part:
+Label           0     1
+Body Part
+XR_ELBOW     1094   660
+XR_FINGER    1280   655
+XR_FOREARM    590   287
+XR_HAND      1497   521
+XR_HUMERUS    321   271
+XR_SHOULDER  1364  1456
+XR_WRIST     2134  1326
