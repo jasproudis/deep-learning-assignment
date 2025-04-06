@@ -2,21 +2,23 @@
 
 import tensorflow as tf
 from tensorflow.keras import layers, models
-from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.applications import EfficientNetB0, ResNet50, InceptionV3
 
 def build_binary_pretrained_model(input_shape, num_classes_binary=1, backbone="EfficientNetB0"):
     if backbone == "EfficientNetB0":
-        base_model = EfficientNetB0(include_top=False,
-                                    weights="imagenet",
-                                    input_shape=input_shape,
-                                    pooling="avg")
+        base_model = EfficientNetB0(include_top=False, weights="imagenet", input_shape=input_shape)
+    elif backbone == "ResNet50":
+        base_model = ResNet50(include_top=False, weights="imagenet", input_shape=input_shape)
+    elif backbone == "InceptionV3":
+        base_model = InceptionV3(include_top=False, weights="imagenet", input_shape=input_shape)
     else:
-        raise ValueError("Unsupported backbone.")
+        raise ValueError("Unsupported backbone. Choose from 'EfficientNetB0', 'ResNet50', or 'InceptionV3'")
 
     base_model.trainable = False  # Initially freeze base model
 
     inputs = tf.keras.Input(shape=input_shape, name="input_image")
     x = base_model(inputs, training=False)
+    x = layers.GlobalMaxPooling2D()(x)
     x = layers.Dropout(0.3)(x)
     output_binary = layers.Dense(num_classes_binary, activation="sigmoid", name="binary_output")(x)
 
