@@ -16,6 +16,9 @@ def get_preprocessing_fn(backbone):
         return inception_v3.preprocess_input
     else:
         raise ValueError("Unsupported backbone.")
+    
+
+'''
 
 # === Label encoding for body parts ===
 BODY_PART_LOOKUP = {
@@ -29,37 +32,11 @@ BODY_PART_LOOKUP = {
     'OTHER': 7
 }
 
-'''
-
-def decode_hybrid_row(image_path, label_bin, weight):
-    img_raw = tf.io.read_file(image_path)
-    img = tf.io.decode_png(img_raw, channels=1)
-    img = tf.image.resize(img, decode_hybrid_row.image_size)
-    img = tf.image.grayscale_to_rgb(img)
-    img = tf.cast(img, tf.float32)
-    img = decode_hybrid_row.preprocessing_fn(img)
-
-    # Extract body part from path and encode
-    parts = tf.strings.split(image_path, os.sep)
-    body_part_str = parts[-2]  # e.g., 'XR_SHOULDER'
-    body_part_index = BODY_PART_LOOKUP.get(body_part_str.numpy().decode(), BODY_PART_LOOKUP["OTHER"])
-    body_part_index = tf.convert_to_tensor(body_part_index, dtype=tf.int32)
-
-    label_bin = tf.cast(label_bin, tf.float32)
-    weight = tf.cast(weight, tf.float32)
-
-    return img, body_part_index, label_bin, weight
-
-'''
 def decode_hybrid_row(image_path, label_bin, body_part, weight):
     img_raw = tf.io.read_file(image_path)
-    img = tf.io.decode_png(img_raw, channels=1)  # should return (H, W, 1)
-    
-    # Defensive check — ensure shape is correct
-    img = tf.ensure_shape(img, [None, None, 1])  # guarantees shape compatibility
-
-    img = tf.image.resize(img, decode_hybrid_row.image_size)  # (H, W, 1)
-    img = tf.image.grayscale_to_rgb(img)  # (H, W, 3)
+    img = tf.io.decode_png(img_raw, channels=1)               # Always grayscale → shape (H, W, 1)
+    img = tf.image.resize(img, decode_hybrid_row.image_size)
+    img = tf.image.grayscale_to_rgb(img)                      # Converts to shape (H, W, 3)
     img = tf.cast(img, tf.float32)
     img = decode_hybrid_row.preprocessing_fn(img)
 
@@ -68,7 +45,6 @@ def decode_hybrid_row(image_path, label_bin, body_part, weight):
     body_part = tf.cast(body_part, tf.int32)
 
     return img, body_part, label_bin, weight
-
 
 
 
@@ -91,6 +67,67 @@ def wrap_decode_hybrid_row(image_size, preprocessing_fn, part_to_index_map):
 
     return wrapper
 
+def wrap_decode_hybrid_row_validation(image_size, preprocessing_fn, part_to_index_map):
+    decode_hybrid_row.image_size = image_size
+    decode_hybrid_row.preprocessing_fn = preprocessing_fn
+    decode_hybrid_row.part_to_index_map = part_to_index_map
+
+    def wrapper(image_path, label_bin, body_part, weight):
+        img, body_part_index, label_bin_out, weight_out = tf.py_function(
+            func=decode_hybrid_row,
+            inp=[image_path, label_bin, body_part, weight],
+            Tout=[tf.float32, tf.int32, tf.float32, tf.float32]
+        )
+        img.set_shape(image_size + (3,))
+        body_part_index.set_shape(())
+        label_bin_out.set_shape(())
+        weight_out.set_shape(())
+        return (img, body_part_index, label_bin_out, weight_out)
+
+    return wrapper
+
+
+'''
+def decode_hybrid_row(image_path, label_bin, body_part, weight):
+    img_raw = tf.io.read_file(image_path)
+    img = tf.io.decode_png(img_raw, channels=1)
+    img = tf.image.resize(img, decode_hybrid_row.image_size)
+    img = tf.image.grayscale_to_rgb(img)
+    img = tf.cast(img, tf.float32)
+    img = decode_hybrid_row.preprocessing_fn(img)
+
+    label_bin = tf.cast(label_bin, tf.float32)
+    weight = tf.cast(weight, tf.float32)
+    body_part = tf.cast(body_part, tf.int32)
+
+    # One-hot encode body part as input
+    body_part_one_hot = tf.one_hot(body_part, depth=decode_hybrid_row.num_categories + 1)
+
+    return img, body_part_one_hot, label_bin, weight
+
+
+def wrap_decode_hybrid_row_onehot(image_size, preprocessing_fn, part_to_index_map):
+    decode_hybrid_row.image_size = image_size
+    decode_hybrid_row.preprocessing_fn = preprocessing_fn
+    decode_hybrid_row.part_to_index_map = part_to_index_map
+    decode_hybrid_row.num_categories = 8
+
+    def wrapper(image_path, label_bin, body_part, weight):
+        img, body_part_one_hot, label_bin_out, weight_out = tf.py_function(
+            func=decode_hybrid_row,
+            inp=[image_path, label_bin, body_part, weight],
+            Tout=[tf.float32, tf.float32, tf.float32, tf.float32]
+        )
+        img.set_shape(image_size + (3,))
+        body_part_one_hot.set_shape((decode_hybrid_row.num_categories + 1,))
+        label_bin_out.set_shape(())
+        weight_out.set_shape(())
+
+        return {'input_image': img, 'input_body_part_onehot': body_part_one_hot}, label_bin_out #, weight_out
+
+    return wrapper
+
+
 
 
 # === Dataset builder ===
@@ -108,14 +145,19 @@ def get_mura_dataset_hybrid(csv_path, image_size=None, batch_size=32, training=T
     # ✅ Add sample weights
     sample_weights = compute_sample_weight(class_weight='balanced', y=binary_labels)
 
-    # ✅ Add body_part_indices here
+    # ✅ Build TF dataset
     ds = tf.data.Dataset.from_tensor_slices((image_paths, binary_labels, body_part_indices, sample_weights))
 
     preprocessing_fn = get_preprocessing_fn(backbone)
     image_size = BACKBONE_IMAGE_SIZES[backbone] if image_size is None else image_size
 
-    # ✅ Pass part_to_index_map only to the mapper
-    ds = ds.map(wrap_decode_hybrid_row(image_size, preprocessing_fn, part_to_index_map), num_parallel_calls=tf.data.AUTOTUNE)
+    # ✅ Choose the correct wrapper for training or validation
+    if training:
+        map_fn = wrap_decode_hybrid_row_onehot(image_size, preprocessing_fn, part_to_index_map)
+    else:
+        map_fn = wrap_decode_hybrid_row_onehot(image_size, preprocessing_fn, part_to_index_map)
+
+    ds = ds.map(map_fn, num_parallel_calls=tf.data.AUTOTUNE)
 
     if training:
         ds = ds.shuffle(1000)

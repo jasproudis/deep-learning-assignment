@@ -32,10 +32,16 @@ def extract_image_metadata(csv_filename, output_csv_filename, base_path):
     for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Processing {os.path.basename(csv_filename)}"):
         study_path = row['study']
         label = int(row['label'])
-        class_name = study_path.split('/')[2].upper()
-
-        if class_name not in ALLOWED_CLASSES:
+        class_name = next((part.upper() for part in study_path.split('/') if part.upper().startswith("XR_")), OTHER_CLASS_NAME)
+        
+        stripped_class = class_name.replace("XR_", "")
+        if stripped_class not in ALLOWED_CLASSES:
+            print(f"[WARN] Unknown class_name: {class_name}")
             class_name = OTHER_CLASS_NAME
+        else:
+            class_name = stripped_class
+
+
 
         study_dir = os.path.join(base_path, study_path.replace("MURA-v1.1/", "").replace("/", os.sep))
         pngs = glob.glob(os.path.join(study_dir, "*.png"))
